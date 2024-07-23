@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:15
+    container_name: production_db
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    env_file:
+      - .env-non-dev
+    ports:
+      - 5430:5432
+    networks:
+      - monitoring
+  
+  redis:
+    image: redis:7
+    container_name: production_redis
+    ports:
+      - 5431:6379
+    networks:
+      - monitoring
+
+  my_app:  
+    build:
+      context: .
+    container_name: production_app
+    env_file:
+      - .env-non-dev
+    command: ["/my_api_app/docker/app.sh"]
+    ports:
+      - 9001:8000
+    depends_on:
+      - db
+      - redis
+    networks:
+      - monitoring
+
+  celery:
+    build:
+      context: .
+    container_name: production_celery
+    command: ["/my_api_app/docker/celery.sh"]
+    env_file:
+      - .env-non-dev
+    depends_on:
+      - redis
+    networks:
+      - monitoring
+
+  flower:
+    build:
+      context: .
+    container_name: production_flower
+    command: ["/my_api_app/docker/flower.sh"]
+    env_file:
+      - .env-non-dev
+    depends_on:
+      - redis
+    networks:
+      - monitoring
+
+  prometheus:
+    image:  prom/prometheus:v2.43.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheusdata:/prometheus
+    restart: unless-stopped
+    ports:
+      - 9090:9090
+    networks:
+      - monitoring
+
+  grafana:
+    image:  grafana/grafana:9.4.7
+    container_name: grafana
+    volumes:
+      - grafanadata:/var/lib/grafana
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    networks:
+      - monitoring
+
+volumes:
+  postgresdata:
+  grafanadata:
+  prometheusdata:
+
+
+networks:
+  monitoring:
+    driver: bridge
